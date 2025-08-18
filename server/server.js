@@ -1,45 +1,92 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
-const socketio = require("socket.io");
+const { Server } = require("socket.io");
 const cors = require("cors");
+const authRoutes = require("./routes/auth");
+const { Card } = require("./db");
+const { verifyJwt } = require("./utils/jwt");
+
 const app = express();
 app.use(cors());
-const server = http.createServer(app);
-//initialize socket.io with cors allowed socketio(server, options
-const io = socketio(server, {
-  cors: { origin: "*" },
-});
-//in-memory data for kanaban cards
-let cards = [
-  { id: 1, content: "learn react", column: "to-do" },
-  { id: 2, content: "Build backend", column: "inprogress" },
-  { id: 3, content: "Deploy ap", column: "done" },
-];
-//when a client connects
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+app.use(express.json());
 
-  //sends current cards to newly connected client
+// REST endpoints for auth
+app.use("/auth", authRoutes);
+
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
+
+// Authenticate socket connections
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error("No token"));
+    const payload = verifyJwt(token);
+    socket.userId = payload.userId; // attach user id to socket
+    next();
+  } catch (e) {
+    next(new Error("Invalid token"));
+  }
+});
+
+io.on("connection", async (socket) => {
+  const userId = socket.userId;
+  console.log(" socket connected for user:", userId);
+
+  // Send this user's cards only
+  const cards = await Card.find({ userId });
   socket.emit("load-cards", cards);
 
-  //Listen for card movement events from clients
-  socket.on("move-card", (updatedCard) => {
-    //update the card in server memory
-    cards = cards.map((card) =>
-      card.id === updatedCard.id ? updatedCard : card
-    );
-
-    //Broadcast the updated card to all other clients except sender
-    socket.broadcast.emit("move-card", updatedCard);
-
-    //
+  // Create card (attach userId)
+  socket.on("create-card", async (newCard) => {
+    try {
+      const card = await Card.create({ ...newCard, userId });
+      io.to(socket.id).emit("create-card", card); // echo to creator
+      socket.broadcast.emit("create-card", card); // broadcast to others (same app)
+    } catch (e) {
+      console.error(e);
+    }
   });
 
-  // Handle client disconnect
-  socket.on("disconnect", () => {
-    console.log("Client disconnected", socket.id);
+  // Move card (update column)
+  socket.on("move-card", async (updatedCard) => {
+    try {
+      await Card.updateOne(
+        { id: updatedCard.id, userId },
+        { column: updatedCard.column }
+      );
+      io.emit("move-card", { ...updatedCard, userId });
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Update content
+  socket.on("update-card", async (updatedCard) => {
+    try {
+      await Card.updateOne(
+        { id: updatedCard.id, userId },
+        { content: updatedCard.content }
+      );
+      io.emit("update-card", { ...updatedCard, userId });
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Delete
+  socket.on("delete-card", async (cardId) => {
+    try {
+      await Card.deleteOne({ id: cardId, userId });
+      io.emit("delete-card", cardId);
+    } catch (e) {
+      console.error(e);
+    }
   });
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`Server running on http://localhost:${PORT}`)
+);
