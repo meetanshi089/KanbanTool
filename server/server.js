@@ -53,7 +53,7 @@ io.on("connection", async (socket) => {
   socket.on("move-card", async (updatedCard) => {
     try {
       await Card.updateOne(
-        { id: updatedCard.id, userId },
+        { _id: updatedCard.id, userId },
         { column: updatedCard.column }
       );
       io.emit("move-card", { ...updatedCard, userId });
@@ -66,7 +66,7 @@ io.on("connection", async (socket) => {
   socket.on("update-card", async (updatedCard) => {
     try {
       await Card.updateOne(
-        { id: updatedCard.id, userId },
+        { _id: updatedCard.id, userId },
         { content: updatedCard.content }
       );
       io.emit("update-card", { ...updatedCard, userId });
@@ -78,7 +78,7 @@ io.on("connection", async (socket) => {
   // Delete
   socket.on("delete-card", async (cardId) => {
     try {
-      await Card.deleteOne({ id: cardId, userId });
+      await Card.deleteOne({ _id: cardId, userId });
       io.emit("delete-card", cardId);
     } catch (e) {
       console.error(e);

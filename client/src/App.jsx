@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { login, signup } from "./api";
 import { createSocket } from "./socket";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const columns = ["todo", "inprogress", "done"];
 
@@ -62,13 +65,13 @@ export default function App() {
     socket.on("load-cards", (serverCards) => setCards(serverCards));
     socket.on("create-card", (newCard) => setCards((p) => [...p, newCard]));
     socket.on("move-card", (updated) =>
-      setCards((p) => p.map((c) => (c.id === updated.id ? updated : c)))
+      setCards((p) => p.map((c) => (c._id === updated._id ? updated : c)))
     );
     socket.on("update-card", (updated) =>
-      setCards((p) => p.map((c) => (c.id === updated.id ? updated : c)))
+      setCards((p) => p.map((c) => (c._id === updated._id ? updated : c)))
     );
     socket.on("delete-card", (id) =>
-      setCards((p) => p.filter((c) => c.id !== id))
+      setCards((p) => p.filter((c) => c._id !== _id))
     );
 
     return () => {
@@ -84,7 +87,7 @@ export default function App() {
   // board actions
   function addCard() {
     if (!newTask.trim()) return;
-    const newCard = { id: Date.now(), content: newTask, column: "todo" };
+    const newCard = { _id: Date.now(), content: newTask, column: "todo" };
     setCards((p) => [...p, newCard]);
     socket.emit("create-card", newCard);
     setNewTask("");
@@ -94,66 +97,64 @@ export default function App() {
     if (!result.destination) return;
     const id = Number(result.draggableId);
     const toCol = result.destination.droppableId;
-    const curr = cards.find((c) => c.id === id);
+    const curr = cards.find((c) => c._id === _id);
     if (!curr || curr.column === toCol) return;
     const updated = { ...curr, column: toCol };
-    setCards((p) => p.map((c) => (c.id === id ? updated : c)));
+    setCards((p) => p.map((c) => (c._id === _id ? updated : c)));
     socket.emit("move-card", updated);
   }
 
+  // auth screen
   if (!token) {
     return (
-      <div className="p-4 space-y-4">
-        <form onSubmit={handleSignup} className="space-y-2">
-          <h2 className="font-bold">Signup</h2>
-          <input name="name" placeholder="Name" className="border p-1" />
-          <input name="email" placeholder="Email" className="border p-1" />
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            className="border p-1"
-          />
-          <button className="bg-green-500 text-white px-2 py-1">Signup</button>
-        </form>
+      <div className="p-6 max-w-lg mx-auto space-y-6">
+        <Card>
+          <CardContent className="space-y-2 p-4">
+            <h2 className="font-bold">Signup</h2>
+            <form onSubmit={handleSignup} className="space-y-2">
+              <Input name="name" placeholder="Name" />
+              <Input name="email" placeholder="Email" />
+              <Input name="password" type="password" placeholder="Password" />
+              <Button type="submit" className="w-full">
+                Signup
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <form onSubmit={handleLogin} className="space-y-2">
-          <h2 className="font-bold">Login</h2>
-          <input name="email" placeholder="Email" className="border p-1" />
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            className="border p-1"
-          />
-          <button className="bg-blue-500 text-white px-2 py-1">Login</button>
-        </form>
+        <Card>
+          <CardContent className="space-y-2 p-4">
+            <h2 className="font-bold">Login</h2>
+            <form onSubmit={handleLogin} className="space-y-2">
+              <Input name="email" placeholder="Email" />
+              <Input name="password" type="password" placeholder="Password" />
+              <Button type="submit" variant="secondary" className="w-full">
+                Login
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // board screen
   return (
-    <div className="p-4">
-      <div className="flex justify-between mb-4">
-        <h1 className="text-xl font-bold">Welcome {user?.name}</h1>
-        <button onClick={logout} className="bg-gray-200 px-2 py-1 rounded">
+    <div className="p-6">
+      <div className="flex justify-between mb-6">
+        <h1 className="text-2xl font-bold">Welcome {user?.name}</h1>
+        <Button variant="outline" onClick={logout}>
           Logout
-        </button>
+        </Button>
       </div>
 
-      <div className="flex mb-4 space-x-2">
-        <input
+      <div className="flex mb-6 space-x-2">
+        <Input
           value={newTask}
           onChange={(e) => setNewTask(e.target.value)}
           placeholder="New task..."
-          className="border p-1 flex-1"
         />
-        <button
-          onClick={addCard}
-          className="bg-blue-500 text-white px-2 py-1 rounded"
-        >
-          Add
-        </button>
+        <Button onClick={addCard}>Add</Button>
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
@@ -161,82 +162,87 @@ export default function App() {
           {columns.map((col) => (
             <Droppable droppableId={col} key={col}>
               {(provided) => (
-                <div
+                <Card
                   ref={provided.innerRef}
                   {...provided.droppableProps}
-                  className="bg-gray-100 p-2 rounded min-h-[200px]"
+                  className="bg-gray-50"
                 >
-                  <h2 className="font-bold capitalize mb-2">{col}</h2>
-                  {cards
-                    .filter((c) => c.column === col)
-                    .map((card, index) => (
-                      <Draggable
-                        key={card.id}
-                        draggableId={String(card.id)}
-                        index={index}
-                      >
-                        {(provided) => (
-                          <div
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            ref={provided.innerRef}
-                            className="p-2 bg-white rounded shadow mb-2 flex justify-between items-center"
-                          >
-                            {editingId === card.id ? (
-                              <form
-                                onSubmit={(e) => {
-                                  e.preventDefault();
-                                  socket.emit("update-card", {
-                                    ...card,
-                                    content: editText,
-                                  });
-                                  setCards((p) =>
-                                    p.map((c) =>
-                                      c.id === card.id
-                                        ? { ...c, content: editText }
-                                        : c
-                                    )
-                                  );
-                                  setEditingId(null);
-                                }}
-                                className="flex-1"
-                              >
-                                <input
-                                  value={editText}
-                                  onChange={(e) => setEditText(e.target.value)}
-                                  className="w-full border rounded px-1"
-                                  autoFocus
-                                />
-                              </form>
-                            ) : (
-                              <span
-                                className="flex-1 cursor-pointer"
-                                onClick={() => {
-                                  setEditingId(card.id);
-                                  setEditText(card.content);
-                                }}
-                              >
-                                {card.content}
-                              </span>
-                            )}
-
-                            <button
-                              onClick={() => {
-                                socket.emit("delete-card", card.id);
-                                setCards((p) =>
-                                  p.filter((c) => c.id !== card.id)
-                                );
-                              }}
-                              className="ml-2 text-red-500 hover:text-red-700"
+                  <CardContent className="p-3 min-h-[200px]">
+                    <h2 className="font-bold capitalize mb-3">{col}</h2>
+                    {cards
+                      .filter((c) => c.column === col)
+                      .map((card, index) => (
+                        <Draggable
+                          key={card._id}
+                          draggableId={String(card._id)}
+                          index={index}
+                        >
+                          {(provided) => (
+                            <Card
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className="mb-2 shadow-sm"
                             >
-                              ✖
-                            </button>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                  {provided.placeholder}
-                </div>
+                              <CardContent className="p-2 flex justify-between items-center">
+                                {editingId === card._id ? (
+                                  <form
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      socket.emit("update-card", {
+                                        ...card,
+                                        content: editText,
+                                      });
+                                      setCards((p) =>
+                                        p.map((c) =>
+                                          c.id === card._id
+                                            ? { ...c, content: editText }
+                                            : c
+                                        )
+                                      );
+                                      setEditingId(null);
+                                    }}
+                                    className="flex-1"
+                                  >
+                                    <Input
+                                      value={editText}
+                                      onChange={(e) =>
+                                        setEditText(e.target.value)
+                                      }
+                                      autoFocus
+                                    />
+                                  </form>
+                                ) : (
+                                  <span
+                                    className="flex-1 cursor-pointer"
+                                    onClick={() => {
+                                      setEditingId(card._id);
+                                      setEditText(card.content);
+                                    }}
+                                  >
+                                    {card.content}
+                                  </span>
+                                )}
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    socket.emit("delete-card", card._id);
+                                    setCards((p) =>
+                                      p.filter((c) => c._id !== card._id)
+                                    );
+                                  }}
+                                >
+                                  ✖
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </Draggable>
+                      ))}
+                    {provided.placeholder}
+                  </CardContent>
+                </Card>
               )}
             </Droppable>
           ))}
