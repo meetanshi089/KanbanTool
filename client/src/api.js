@@ -1,7 +1,7 @@
 // client/src/api.js
 import axios from "axios";
 
-const API_URL = "http://localhost:4000"; // adjust if backend runs elsewhere
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000"; // adjust if backend runs elsewhere
 
 export async function signup(name, email, password) {
   const res = await axios.post(`${API_URL}/auth/signup`, {
